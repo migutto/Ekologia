@@ -9,7 +9,8 @@ Repozytorium zawiera:
 
 - statyczną aplikację WWW działającą offline,
 - skrypt Pythona generujący workbook Excel,
-- gotowy plik `output/Ekologia_kalkulator.xlsx`.
+- gotowy plik `output/Ekologia_kalkulator.xlsx`,
+- dwa arkusze sprawozdań roboczych odwzorowujące wzory z zajęć.
 
 Całość jest przygotowana po polsku i bez backendu, tak aby działała lokalnie z pliku `index.html` lub po publikacji na GitHub Pages.
 
@@ -76,7 +77,8 @@ output/Ekologia_kalkulator.xlsx
 
 Generator jest deterministyczny:
 
-- używa stałych danych przykładowych,
+- zapisuje workbook z pustymi polami wejściowymi w `Powietrze_Dane` i `Gleba_Dane`,
+- zachowuje mapowania, formuły, wykresy i arkusze sprawozdań,
 - nie losuje wyników,
 - zapisuje zawsze ten sam plik wyjściowy.
 
@@ -152,17 +154,73 @@ Workbook zawiera arkusze:
 3. `Powietrze_Mapowanie`
 4. `Powietrze_Wyniki`
 5. `Powietrze_Wykresy`
-6. `Gleba_Dane`
-7. `Gleba_Wyniki`
-8. `Gleba_Wykresy`
+6. `Sprawozdanie_powietrze`
+7. `Gleba_Dane`
+8. `Gleba_Wyniki`
+9. `Gleba_Wykresy`
+10. `Sprawozdanie_gleba`
 
 Zasady układu:
 
 - komórki wejściowe są wyróżnione jasnym niebieskim tłem,
 - stałe i opisy są oznaczone na szaro,
 - komórki z formułami są wizualnie oddzielone,
-- wykresy są przygotowane od razu,
+- pola ręczne w arkuszach sprawozdań są wyróżnione osobnym kolorem,
+- pola automatyczne w arkuszach sprawozdań pobierają dane z arkuszy wejściowych i wynikowych,
+- wykresy są przygotowane od razu i pozostają w workbooku także przy pustych danych,
 - Excel ma wymuszone pełne przeliczenie po otwarciu pliku.
+
+## Czyszczenie danych w workbooku
+
+Nie dodano aktywnego przycisku `Wyczyść dane` w samym Excelu, ponieważ bez VBA i kontrolek formularza byłoby to mniej stabilne niż zwykły workbook dydaktyczny.
+
+Zastosowany został bezpieczny fallback:
+
+- `Powietrze_Dane` startuje z pustymi polami wejściowymi,
+- `Gleba_Dane` startuje z pustymi polami pomiarowymi,
+- wartości stałe wymagane przez instrukcję pozostają uzupełnione, np. `c_NaOH = 0.1`, `c_HCl = 0.1`, `p = 10000`,
+- mapowania, formuły, wykresy i arkusze wynikowe nie są czyszczone.
+
+Dzięki temu workbook jest gotowy do realnego wpisywania własnych danych od razu po otwarciu.
+
+## Arkusze sprawozdań
+
+### `Sprawozdanie_powietrze`
+
+Arkusz odwzorowuje układ sprawozdania do ćwiczenia z powietrza i automatycznie pobiera:
+
+- typ punktu, województwo, adres i nazwę stacji,
+- pierwsze 3 aktywne / uzupełnione zanieczyszczenia,
+- jednostki,
+- zakres dat i godzinę,
+- `MIN`, `ŚREDNIA`, `MAX`,
+- `Psi`,
+- `Tau`.
+
+Pola organizacyjne i opisowe, takie jak data, rok akademicki, grupa, skład zespołu i interpretacja, pozostają do ręcznego wpisania.
+
+### `Sprawozdanie_gleba`
+
+Arkusz odwzorowuje układ sprawozdania do ćwiczenia z gleby i automatycznie pobiera:
+
+- pomiary 1 i 2,
+- średnie,
+- `Hh`,
+- `S`,
+- `T`,
+- wartości pomocnicze `Mz`, `Hh_ha`, `CaO`, `CaCO3`,
+- klasyfikację gleby.
+
+Pola tekstowe, przebieg reakcji oraz interpretacja pozostają ręczne.
+
+## Wykresy w workbooku
+
+- `Powietrze_Wykresy` zawiera 6 wykresów typu scatter z wygładzonymi liniami i znacznikami.
+- `Gleba_Wykresy` zawiera 3 schludne wizualizacje pomocnicze.
+- Wykresy korzystają z natywnych wykresów Excela przez `openpyxl`.
+- Zadbano o jasne tło, spokojne kolory, delikatną siatkę i czytelne legendy.
+- Puste wykresy pozostają widoczne jako szablon do późniejszego uzupełnienia.
+- Trendline, równania i `R²` nie zostały dodane, bo `openpyxl` nie daje tu wystarczająco stabilnej kontroli przy seryjnym generowaniu wielu wykresów.
 
 ## Mapowania wbudowane w projekt
 

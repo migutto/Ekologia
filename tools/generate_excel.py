@@ -6,6 +6,11 @@ import tempfile
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, Reference, ScatterChart, Series
+from openpyxl.chart.axis import ChartLines
+from openpyxl.chart.data_source import StrRef
+from openpyxl.chart.shapes import GraphicalProperties, LineProperties
+from openpyxl.chart.text import Text
+from openpyxl.chart.title import Title
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -94,6 +99,14 @@ SOIL_SAMPLE = {
     "hectare": (10000, 0.20, 1500),
 }
 
+AIR_STATIONS = ["miejska", "podmiejska", "pozamiejska"]
+AIR_SLOT_COUNT = 6
+AIR_CHART_COLORS = {
+    "miejska": "3B6FB6",
+    "podmiejska": "4F8A5B",
+    "pozamiejska": "B57F3F",
+}
+
 THIN_BORDER = Border(
     left=Side(style="thin", color="D7D7C9"),
     right=Side(style="thin", color="D7D7C9"),
@@ -107,6 +120,8 @@ FILL_FORMULA = PatternFill("solid", fgColor="F2F2F2")
 FILL_SECTION = PatternFill("solid", fgColor="D9EAD3")
 FILL_WARN = PatternFill("solid", fgColor="FFF2CC")
 FILL_TITLE = PatternFill("solid", fgColor="EAD7C0")
+FILL_MANUAL = PatternFill("solid", fgColor="FCE4D6")
+FILL_AUTO = PatternFill("solid", fgColor="E2F0D9")
 
 FONT_HEADER = Font(name="Segoe UI", size=11, bold=True, color="214E36")
 FONT_TITLE = Font(name="Segoe UI", size=14, bold=True, color="24312A")
@@ -153,6 +168,43 @@ def set_widths(ws, widths: dict[str, float]):
         ws.column_dimensions[column].width = width
 
 
+def hide_columns(ws, columns: list[str]):
+    for column in columns:
+        ws.column_dimensions[column].hidden = True
+
+
+def style_report_label(cell):
+    style_cell(cell, fill=FILL_STATIC, font=FONT_HEADER, alignment=ALIGN_TOP)
+
+
+def style_report_manual(cell):
+    style_cell(cell, fill=FILL_MANUAL, font=FONT_NORMAL, alignment=ALIGN_TOP)
+
+
+def style_report_auto(cell, *, number_format=None):
+    style_cell(cell, fill=FILL_AUTO, font=FONT_NORMAL, alignment=ALIGN_TOP, number_format=number_format)
+
+
+def style_chart_common(chart):
+    chart.style = 2
+    chart.height = 7.6
+    chart.width = 10.8
+    chart.legend.position = "b"
+    chart.graphical_properties = GraphicalProperties(
+        noFill=True,
+        ln=LineProperties(solidFill="D8DEE8", w=12700),
+    )
+    chart.x_axis.spPr = GraphicalProperties(ln=LineProperties(solidFill="B8C2CC", w=9525))
+    chart.y_axis.spPr = GraphicalProperties(ln=LineProperties(solidFill="B8C2CC", w=9525))
+    chart.y_axis.majorGridlines = ChartLines(
+        spPr=GraphicalProperties(ln=LineProperties(solidFill="E3E8EF", w=6350))
+    )
+
+
+def set_chart_title_from_cell(chart, formula_ref: str):
+    chart.title = Title(tx=Text(strRef=StrRef(f=formula_ref)))
+
+
 def data_range_formula(column: str, first_row: int, last_row: int, fn: str, sheet_name: str | None = None) -> str:
     prefix = f"'{sheet_name}'!" if sheet_name else ""
     range_ref = f"{prefix}{column}{first_row}:{column}{last_row}"
@@ -173,20 +225,23 @@ def build_readme_sheet(ws):
     lines = [
         ("A3", "Ten workbook wspiera dwa ćwiczenia: poziom zanieczyszczenia powietrza oraz parametry fizykochemiczne gleby."),
         ("A4", "Kolory: niebieski = dane wejściowe, szary = stałe, jasnoszary = formuły, żółty = uwagi i ostrzeżenia."),
-        ("A5", "Powietrze: wpisz alias zanieczyszczenia, nazwę, jednostkę i 10 kolejnych dni danych dla 3 stacji."),
-        ("A6", "Gleba: wpisz surowe pomiary pH, objętości i stężenia. Arkusz wynikowy obliczy Hh, S, T, Mz, Hh_ha, CaO i CaCO3."),
-        ("A8", "Wzory zaimplementowane w workbooku:"),
-        ("A9", "Psi = Σ(Cx / D24x)"),
-        ("A10", "Tau = Σ(Cx * alpha_t)"),
-        ("A11", "Hh = V * c * 10 * k"),
-        ("A12", "Mz = p * h * rho"),
-        ("A13", "Hh_ha = Hh * Mz / 100"),
-        ("A14", "CaO = Hh_ha * 0,028"),
-        ("A15", "CaCO3 = Hh_ha * 0,050"),
-        ("A16", "S = (V * c - V1 * c1) * 4 * 5"),
-        ("A17", "T = Hh + S"),
-        ("A19", "Założenie: klasyfikacja gleby korzysta ze średniego pH badanej próbki w KCl."),
-        ("A20", "Brakujących limitów i współczynników toksyczności nie uzupełniono automatycznie - workbook pokazuje wtedy ostrzeżenia."),
+        ("A5", "Workbook startuje z pustymi polami wejściowymi w arkuszach Powietrze_Dane i Gleba_Dane, aby można było od razu wpisać własne dane."),
+        ("A6", "Powietrze: wpisz alias zanieczyszczenia, nazwę, jednostkę i 10 kolejnych dni danych dla 3 stacji. Arkusz Sprawozdanie_powietrze pobiera z nich dane automatycznie."),
+        ("A7", "Gleba: wpisz surowe pomiary pH, objętości i stężenia. Arkusze wynikowe oraz Sprawozdanie_gleba uzupełniają się automatycznie."),
+        ("A9", "Wzory zaimplementowane w workbooku:"),
+        ("A10", "Psi = Σ(Cx / D24x)"),
+        ("A11", "Tau = Σ(Cx * alpha_t)"),
+        ("A12", "Hh = V * c * 10 * k"),
+        ("A13", "Mz = p * h * rho"),
+        ("A14", "Hh_ha = Hh * Mz / 100"),
+        ("A15", "CaO = Hh_ha * 0,028"),
+        ("A16", "CaCO3 = Hh_ha * 0,050"),
+        ("A17", "S = (V * c - V1 * c1) * 4 * 5"),
+        ("A18", "T = Hh + S"),
+        ("A20", "Arkusze Sprawozdanie_powietrze i Sprawozdanie_gleba są roboczym odwzorowaniem wzorów sprawozdań i zawierają pola automatyczne oraz ręczne."),
+        ("A21", "Wykresy pozostają widoczne także przy pustych danych wejściowych. Trendline, równania i R² nie zostały dodane - openpyxl nie daje tu stabilnej kontroli przy seryjnym generowaniu wykresów."),
+        ("A22", "Założenie: klasyfikacja gleby korzysta ze średniego pH badanej próbki w KCl."),
+        ("A23", "Brakujących limitów i współczynników toksyczności nie uzupełniono automatycznie - workbook pokazuje wtedy ostrzeżenia."),
     ]
     for cell_ref, value in lines:
         cell = ws[cell_ref]
@@ -199,11 +254,11 @@ def build_air_data_sheet(ws):
     merge_title(ws, "A1", "H1", "Powietrze - dane wejściowe")
     ws.freeze_panes = "A6"
     ws["A2"] = "Data początkowa"
-    ws["B2"] = AIR_SAMPLE["start_date"]
+    ws["B2"] = None
     ws["A3"] = "Data końcowa"
-    ws["B3"] = "=B2+9"
+    ws["B3"] = '=IF(B2="","",B2+9)'
     ws["A4"] = "Godzina pomiaru"
-    ws["B4"] = AIR_SAMPLE["hour"]
+    ws["B4"] = None
     for cell_ref in ("A2", "A3", "A4"):
         style_cell(ws[cell_ref], fill=FILL_STATIC, font=FONT_HEADER)
     style_cell(ws["B2"], fill=FILL_INPUT, font=FONT_NORMAL, number_format="dd.mm.yyyy")
@@ -211,32 +266,32 @@ def build_air_data_sheet(ws):
     style_cell(ws["B4"], fill=FILL_INPUT, font=FONT_NORMAL)
 
     set_headers(ws, 6, ["Typ obszaru", "Typ punktu", "Województwo", "Adres", "Nazwa stacji"])
-    for row_index, station in enumerate(AIR_SAMPLE["stations"], start=7):
-        values = [station[0], station[1], station[2], station[3], station[4]]
-        for column_index, value in enumerate(values, start=1):
-            cell = ws.cell(row=row_index, column=column_index, value=value)
+    for row_index, station_name in enumerate(AIR_STATIONS, start=7):
+        ws.cell(row=row_index, column=1, value=station_name)
+        style_cell(ws.cell(row=row_index, column=1), fill=FILL_STATIC, font=FONT_NORMAL, alignment=ALIGN_TOP)
+        for column_index in range(2, 6):
+            cell = ws.cell(row=row_index, column=column_index, value=None)
             style_cell(cell, fill=FILL_INPUT, font=FONT_NORMAL, alignment=ALIGN_TOP)
 
-    for slot_index, pollutant in enumerate(AIR_SAMPLE["pollutants"]):
+    for slot_index in range(AIR_SLOT_COUNT):
         start_row = air_block_start(slot_index)
         ws.cell(start_row, 1, f"Zanieczyszczenie {slot_index + 1}")
-        ws.cell(start_row, 2, pollutant[0])
-        ws.cell(start_row, 3, pollutant[1])
-        ws.cell(start_row, 4, pollutant[2])
-        ws.cell(start_row, 5, "Wprowadź 10 kolejnych dni danych")
+        ws.cell(start_row, 2, None)
+        ws.cell(start_row, 3, None)
+        ws.cell(start_row, 4, None)
+        ws.cell(start_row, 5, "Uzupełnij alias, nazwę, jednostkę i 10 kolejnych dni danych")
         set_headers(ws, start_row + 1, ["Data", "Miejska", "Podmiejska", "Pozamiejska"])
         for column in range(1, 6):
             style_cell(ws.cell(start_row, column), fill=FILL_STATIC if column in (1, 5) else FILL_INPUT, font=FONT_HEADER if column == 1 else FONT_NORMAL, alignment=ALIGN_TOP)
         for offset in range(10):
             row = start_row + 2 + offset
-            date_cell = ws.cell(row=row, column=1, value=f"=$B$2+{offset}")
+            date_cell = ws.cell(row=row, column=1, value=f'=IF($B$2="","",$B$2+{offset})')
             style_cell(date_cell, fill=FILL_FORMULA, font=FONT_NORMAL, number_format="dd.mm.yyyy")
-            for col_index, series in enumerate(pollutant[3:6], start=2):
-                value = series[offset]
-                cell = ws.cell(row=row, column=col_index, value=value if value != "" else None)
+            for col_index in range(2, 5):
+                cell = ws.cell(row=row, column=col_index, value=None)
                 style_cell(cell, fill=FILL_INPUT, font=FONT_NORMAL)
         ws.cell(start_row + 12, 1, "Godzina pomiaru")
-        ws.cell(start_row + 12, 2, "=$B$4")
+        ws.cell(start_row + 12, 2, '=IF($B$4="","",$B$4)')
         style_cell(ws.cell(start_row + 12, 1), fill=FILL_STATIC, font=FONT_HEADER)
         style_cell(ws.cell(start_row + 12, 2), fill=FILL_FORMULA, font=FONT_NORMAL)
 
@@ -278,11 +333,11 @@ def build_air_results_sheet(ws):
     merge_title(ws, "A1", "U1", "Powietrze - wyniki")
     ws.freeze_panes = "A10"
     set_headers(ws, 2, ["Stacja", "Psi", "Interpretacja Psi", "Tau", "Interpretacja Tau", "Przekroczenia średniej", "Przekroczenia maksimum", "Pominięcia z Psi", "Pominięcia z Tau"])
-    for row_index, station in enumerate(["miejska", "podmiejska", "pozamiejska"], start=3):
+    for row_index, station in enumerate(AIR_STATIONS, start=3):
         ws.cell(row_index, 1, station)
-        ws.cell(row_index, 2, f'=SUMIF($B$10:$B$27,A{row_index},$O$10:$O$27)')
+        ws.cell(row_index, 2, f'=IF(SUMPRODUCT(($B$10:$B$27=A{row_index})*(ISNUMBER($K$10:$K$27)))=0,"",SUMIF($B$10:$B$27,A{row_index},$O$10:$O$27))')
         ws.cell(row_index, 3, f'=IF(B{row_index}="","Brak danych",IF(B{row_index}<=1,"jakość powietrza zadowalająca","wyższa wartość oznacza gorszą jakość powietrza"))')
-        ws.cell(row_index, 4, f'=SUMIF($B$10:$B$27,A{row_index},$P$10:$P$27)')
+        ws.cell(row_index, 4, f'=IF(SUMPRODUCT(($B$10:$B$27=A{row_index})*(ISNUMBER($K$10:$K$27)))=0,"",SUMIF($B$10:$B$27,A{row_index},$P$10:$P$27))')
         ws.cell(row_index, 5, f'=IF(D{row_index}="","Brak danych","niższa wartość oznacza lepszą jakość powietrza")')
         ws.cell(row_index, 6, f'=COUNTIFS($B$10:$B$27,A{row_index},$M$10:$M$27,"TAK")')
         ws.cell(row_index, 7, f'=COUNTIFS($B$10:$B$27,A{row_index},$N$10:$N$27,"TAK")')
@@ -294,9 +349,9 @@ def build_air_results_sheet(ws):
     headers = ["Slot", "Stacja", "Alias", "Nazwa", "Jednostka", "Nazwa do limitu", "Limit D24", "Nazwa do toksyczności", "Wsp. toksyczności", "MIN", "ŚREDNIA", "MAX", "Średnia > limit", "MAX > limit", "Składnik Psi", "Składnik Tau", "Ostrzeżenie limit", "Ostrzeżenie toksyczność", "Psi stacji", "Tau stacji", "Uwagi"]
     set_headers(ws, 9, headers)
     detail_row = 10
-    for slot_index in range(6):
+    for slot_index in range(AIR_SLOT_COUNT):
         block_row = air_block_start(slot_index)
-        for station_name in ["miejska", "podmiejska", "pozamiejska"]:
+        for station_name in AIR_STATIONS:
             value_col = station_value_column(station_name)
             first_data_row = block_row + 2
             last_data_row = block_row + 11
@@ -312,15 +367,15 @@ def build_air_results_sheet(ws):
             ws.cell(detail_row, 10, data_range_formula(value_col, first_data_row, last_data_row, "MIN", "Powietrze_Dane"))
             ws.cell(detail_row, 11, data_range_formula(value_col, first_data_row, last_data_row, "AVERAGE", "Powietrze_Dane"))
             ws.cell(detail_row, 12, data_range_formula(value_col, first_data_row, last_data_row, "MAX", "Powietrze_Dane"))
-            ws.cell(detail_row, 13, f'=IF(G{detail_row}="","Brak limitu",IF(K{detail_row}="","Brak danych",IF(K{detail_row}>G{detail_row},"TAK","NIE")))')
-            ws.cell(detail_row, 14, f'=IF(G{detail_row}="","Brak limitu",IF(L{detail_row}="","Brak danych",IF(L{detail_row}>G{detail_row},"TAK","NIE")))')
+            ws.cell(detail_row, 13, f'=IF(C{detail_row}&D{detail_row}="","",IF(G{detail_row}="","Brak limitu",IF(K{detail_row}="","Brak danych",IF(K{detail_row}>G{detail_row},"TAK","NIE"))))')
+            ws.cell(detail_row, 14, f'=IF(C{detail_row}&D{detail_row}="","",IF(G{detail_row}="","Brak limitu",IF(L{detail_row}="","Brak danych",IF(L{detail_row}>G{detail_row},"TAK","NIE"))))')
             ws.cell(detail_row, 15, f'=IF(AND(ISNUMBER(K{detail_row}),ISNUMBER(G{detail_row})),K{detail_row}/G{detail_row},"")')
             ws.cell(detail_row, 16, f'=IF(AND(ISNUMBER(K{detail_row}),ISNUMBER(I{detail_row})),K{detail_row}*I{detail_row},"")')
             ws.cell(detail_row, 17, f'=IF(AND(K{detail_row}<>"",G{detail_row}=""),"Brak wartości dopuszczalnej w instrukcji — zanieczyszczenie pominięto w indeksie jakości.","")')
             ws.cell(detail_row, 18, f'=IF(AND(K{detail_row}<>"",I{detail_row}=""),"Brak współczynnika toksyczności w instrukcji — zanieczyszczenie pominięto w indeksie toksyczności.","")')
             ws.cell(detail_row, 19, f'=SUMIF($B$10:$B$27,B{detail_row},$O$10:$O$27)')
             ws.cell(detail_row, 20, f'=SUMIF($B$10:$B$27,B{detail_row},$P$10:$P$27)')
-            ws.cell(detail_row, 21, "Wskaźnik liczony dla całej stacji")
+            ws.cell(detail_row, 21, f'=IF(C{detail_row}&D{detail_row}="","","Wskaźnik liczony dla całej stacji")')
             for column in range(1, 22):
                 fill = FILL_STATIC if column in (1, 2) else FILL_FORMULA
                 style_cell(ws.cell(detail_row, column), fill=fill, font=FONT_NORMAL, alignment=ALIGN_TOP)
@@ -334,7 +389,7 @@ def build_soil_data_sheet(ws):
     ws.freeze_panes = "A4"
     section_title(ws, "A3", "Kwasowość czynna")
     set_headers(ws, 4, ["Przedmiot analizy", "Pomiar 1", "Pomiar 2", "Średnia"])
-    active_rows = [("Woda destylowana", SOIL_SAMPLE["active"][0], SOIL_SAMPLE["active"][1]), ("Badana próbka gleby", SOIL_SAMPLE["active"][2], SOIL_SAMPLE["active"][3])]
+    active_rows = [("Woda destylowana", None, None), ("Badana próbka gleby", None, None)]
     for row_index, values in enumerate(active_rows, start=5):
         ws.cell(row_index, 1, values[0])
         ws.cell(row_index, 2, values[1])
@@ -346,7 +401,7 @@ def build_soil_data_sheet(ws):
 
     section_title(ws, "A9", "Kwasowość wymienna")
     set_headers(ws, 10, ["Przedmiot analizy", "Pomiar 1", "Pomiar 2", "Średnia"])
-    exchange_rows = [("KCl", SOIL_SAMPLE["exchange"][0], SOIL_SAMPLE["exchange"][1]), ("Badana próbka gleby", SOIL_SAMPLE["exchange"][2], SOIL_SAMPLE["exchange"][3])]
+    exchange_rows = [("KCl", None, None), ("Badana próbka gleby", None, None)]
     for row_index, values in enumerate(exchange_rows, start=11):
         ws.cell(row_index, 1, values[0])
         ws.cell(row_index, 2, values[1])
@@ -358,7 +413,7 @@ def build_soil_data_sheet(ws):
 
     section_title(ws, "A15", "Kwasowość hydrolityczna")
     set_headers(ws, 16, ["Parametr", "Wartość", "Jednostka"])
-    hydrolityc_rows = [("VNaOH", SOIL_SAMPLE["hydrolytic"][0], "cm3"), ("c_NaOH", SOIL_SAMPLE["hydrolytic"][1], "mol/dm3"), ("k", SOIL_SAMPLE["hydrolytic"][2], "współczynnik")]
+    hydrolityc_rows = [("VNaOH", None, "cm3"), ("c_NaOH", 0.1, "mol/dm3"), ("k", 1.75, "współczynnik")]
     for row_index, values in enumerate(hydrolityc_rows, start=17):
         for column_index, value in enumerate(values, start=1):
             ws.cell(row_index, column_index, value)
@@ -366,7 +421,7 @@ def build_soil_data_sheet(ws):
 
     section_title(ws, "A22", "Suma kationów zasadowych")
     set_headers(ws, 23, ["Parametr", "Wartość", "Jednostka"])
-    base_rows = [("V_HCl", SOIL_SAMPLE["base"][0], "cm3"), ("c_HCl", SOIL_SAMPLE["base"][1], "mol/dm3"), ("V1_NaOH", SOIL_SAMPLE["base"][2], "cm3"), ("c1_NaOH", SOIL_SAMPLE["base"][3], "mol/dm3")]
+    base_rows = [("V_HCl", None, "cm3"), ("c_HCl", 0.1, "mol/dm3"), ("V1_NaOH", None, "cm3"), ("c1_NaOH", 0.1, "mol/dm3")]
     for row_index, values in enumerate(base_rows, start=24):
         for column_index, value in enumerate(values, start=1):
             ws.cell(row_index, column_index, value)
@@ -374,7 +429,7 @@ def build_soil_data_sheet(ws):
 
     section_title(ws, "A30", "Parametry dla 1 ha")
     set_headers(ws, 31, ["Parametr", "Wartość", "Jednostka"])
-    hectare_rows = [("p", SOIL_SAMPLE["hectare"][0], "m2"), ("h", SOIL_SAMPLE["hectare"][1], "m"), ("rho", SOIL_SAMPLE["hectare"][2], "kg/m3")]
+    hectare_rows = [("p", 10000, "m2"), ("h", 0.20, "m"), ("rho", 1500, "kg/m3")]
     for row_index, values in enumerate(hectare_rows, start=32):
         for column_index, value in enumerate(values, start=1):
             ws.cell(row_index, column_index, value)
@@ -423,38 +478,44 @@ def build_soil_results_sheet(ws):
 
 def build_air_charts_sheet(ws):
     merge_title(ws, "A1", "L1", "Powietrze - wykresy")
-    ws["A2"] = "Wykresy korzystają bezpośrednio z danych z arkusza Powietrze_Dane."
+    ws.sheet_view.showGridLines = False
+    ws["A2"] = "Wykresy korzystają bezpośrednio z danych z arkusza Powietrze_Dane i pozostają widoczne także przy pustych danych wejściowych."
     style_cell(ws["A2"], fill=FILL_WARN, font=FONT_NORMAL)
 
     anchors = ["A4", "G4", "A20", "G20", "A36", "G36"]
     for slot_index, anchor in enumerate(anchors):
         start_row = air_block_start(slot_index)
-        alias = AIR_SAMPLE["pollutants"][slot_index][0] or f"Slot {slot_index + 1}"
+        helper_row = 2 + slot_index
+        ws.cell(helper_row, 14, f"=IF(AND(Powietrze_Dane!$C${start_row}<>\"\",Powietrze_Dane!$D${start_row}<>\"\"),Powietrze_Dane!$C${start_row}&\" [\"&Powietrze_Dane!$D${start_row}&\"]\",\"Zanieczyszczenie {slot_index + 1} [jednostka]\")")
+        style_cell(ws.cell(helper_row, 14), fill=FILL_FORMULA, font=FONT_NORMAL)
         chart = ScatterChart()
-        chart.title = f"Trend stężeń - {alias}"
-        chart.style = 13
+        set_chart_title_from_cell(chart, f"'Powietrze_Wykresy'!$N${helper_row}")
+        style_chart_common(chart)
         chart.scatterStyle = "smoothMarker"
-        chart.height = 7
-        chart.width = 10
         chart.x_axis.title = "Data"
-        chart.y_axis.title = "Stężenie [µg/m3]"
-        xvalues = Reference(Workbook().active, min_col=1, min_row=1, max_row=1)
+        chart.y_axis.title = "Stężenie [jednostka]"
+        chart.x_axis.number_format = "dd.mm"
+        chart.x_axis.majorGridlines = None
         xvalues = Reference(ws.parent["Powietrze_Dane"], min_col=1, min_row=start_row + 2, max_row=start_row + 11)
-        for station_name, color in [("miejska", "2F6A48"), ("podmiejska", "3F6B85"), ("pozamiejska", "A57845")]:
+        for station_name in AIR_STATIONS:
+            color = AIR_CHART_COLORS[station_name]
             column = {"miejska": 2, "podmiejska": 3, "pozamiejska": 4}[station_name]
             values = Reference(ws.parent["Powietrze_Dane"], min_col=column, min_row=start_row + 2, max_row=start_row + 11)
             series = Series(values, xvalues, title=station_name)
             series.marker.symbol = "circle"
-            series.marker.size = 6
+            series.marker.size = 5
+            series.marker.graphicalProperties = GraphicalProperties(solidFill=color, ln=LineProperties(solidFill=color, w=9525))
             series.graphicalProperties.line.solidFill = color
-            series.graphicalProperties.line.width = 24000
+            series.graphicalProperties.line.width = 18000
             chart.series.append(series)
         ws.add_chart(chart, anchor)
     set_widths(ws, {"A": 18, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18, "H": 18, "I": 18, "J": 18, "K": 18, "L": 18})
+    hide_columns(ws, ["N"])
 
 
 def build_soil_charts_sheet(ws):
     merge_title(ws, "A1", "J1", "Gleba - wizualizacje pomocnicze")
+    ws.sheet_view.showGridLines = False
     ws["A2"] = "Wizualizacje pomocnicze"
     style_cell(ws["A2"], fill=FILL_WARN, font=FONT_HEADER)
     ws["A4"] = "Porównanie pH"
@@ -486,20 +547,334 @@ def build_soil_charts_sheet(ws):
     def add_bar_chart(title: str, min_row: int, max_row: int, anchor: str):
         chart = BarChart()
         chart.title = title
-        chart.style = 10
-        chart.height = 7
-        chart.width = 10
+        style_chart_common(chart)
         chart.y_axis.title = "Wartość"
+        chart.gapWidth = 70
         data = Reference(ws, min_col=2, min_row=min_row, max_row=max_row)
         categories = Reference(ws, min_col=1, min_row=min_row, max_row=max_row)
         chart.add_data(data, titles_from_data=False)
         chart.set_categories(categories)
+        chart.legend = None
+        chart.series[0].graphicalProperties = GraphicalProperties(
+            solidFill="7AA6C2",
+            ln=LineProperties(solidFill="5F8AA4", w=12700),
+        )
         ws.add_chart(chart, anchor)
 
     add_bar_chart("Wizualizacje pomocnicze - porównanie pH", 5, 8, "D4")
     add_bar_chart("Wizualizacje pomocnicze - Hh, S i T", 13, 15, "D20")
     add_bar_chart("Wizualizacje pomocnicze - CaO i CaCO3", 20, 21, "D36")
     set_widths(ws, {"A": 30, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18, "H": 18, "I": 18, "J": 18})
+
+
+def build_air_report_sheet(ws):
+    merge_title(ws, "A1", "I1", "Ćwiczenie nr 1 - Poziom zanieczyszczenia powietrza")
+    ws.freeze_panes = "A5"
+    ws.sheet_view.showGridLines = False
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = "1:4"
+
+    for label_cell, value_range in {
+        "A3": "B3:C3",
+        "D3": "E3:F3",
+        "G3": "H3:I3",
+        "A4": "B4:C4",
+        "D4": "E4:F4",
+        "G4": "H4:I4",
+    }.items():
+        ws.merge_cells(f"{value_range}")
+        style_report_label(ws[label_cell])
+        style_report_manual(ws[value_range.split(":")[0]])
+
+    ws["A3"] = "Data"
+    ws["D3"] = "Rok akademicki"
+    ws["G3"] = "Grupa"
+    ws["A4"] = "Zespół"
+    ws["D4"] = "Zaliczenie"
+    ws["G4"] = "Uwagi organizacyjne"
+
+    section_title(ws, "A6", "Skład zespołu badawczego")
+    set_headers(ws, 7, ["Lp.", "Imię i nazwisko", "Rola w zespole", "Uwagi"])
+    for row in range(8, 12):
+        ws.cell(row, 1, row - 7)
+        style_report_label(ws.cell(row, 1))
+        for column in range(2, 5):
+            style_report_manual(ws.cell(row, column))
+
+    section_title(ws, "A13", "Wybrane punkty pomiarowe")
+    set_headers(ws, 14, ["Lp.", "Typ punktu", "Województwo", "Adres", "Nazwa stacji"])
+    for idx, row in enumerate(range(15, 18), start=7):
+        ws.cell(row, 1, row - 14)
+        style_report_label(ws.cell(row, 1))
+        ws.cell(row, 2, f"=Powietrze_Dane!$B${idx}")
+        ws.cell(row, 3, f"=Powietrze_Dane!$C${idx}")
+        ws.cell(row, 4, f"=Powietrze_Dane!$D${idx}")
+        ws.cell(row, 5, f"=Powietrze_Dane!$E${idx}")
+        for column in range(2, 6):
+            style_report_auto(ws.cell(row, column))
+
+    section_title(ws, "A19", "Wybrane zanieczyszczenia")
+    set_headers(ws, 20, ["Lp.", "Nazwa zanieczyszczenia", "Jednostka pomiaru", "Częstotliwość pomiaru"])
+
+    for idx in range(AIR_SLOT_COUNT):
+        slot_row = air_block_start(idx)
+        helper_row = 2 + idx
+        ws.cell(helper_row, 26, f"=Powietrze_Dane!$B${slot_row}")
+        ws.cell(helper_row, 27, f"=Powietrze_Dane!$C${slot_row}")
+        ws.cell(helper_row, 28, f"=Powietrze_Dane!$D${slot_row}")
+        ws.cell(helper_row, 29, idx + 1)
+        for column in range(26, 30):
+            style_cell(ws.cell(helper_row, column), fill=FILL_FORMULA, font=FONT_NORMAL)
+
+    for helper_row in range(10, 13):
+        position = helper_row - 9
+        ws.cell(
+            helper_row,
+            30,
+            f'=IFERROR(INDEX($AC$2:$AC$7,AGGREGATE(15,6,(ROW($AC$2:$AC$7)-ROW($AC$2)+1)/((LEN($Z$2:$Z$7)+LEN($AA$2:$AA$7))>0),{position})),"")',
+        )
+        ws.cell(helper_row, 31, f'=IF($AD{helper_row}="","",INDEX($AA$2:$AA$7,$AD{helper_row}))')
+        ws.cell(helper_row, 32, f'=IF($AD{helper_row}="","",INDEX($AB$2:$AB$7,$AD{helper_row}))')
+        for column in range(30, 33):
+            style_cell(ws.cell(helper_row, column), fill=FILL_FORMULA, font=FONT_NORMAL)
+
+    for row_index, helper_row in enumerate(range(10, 13), start=21):
+        ws.cell(row_index, 1, row_index - 20)
+        style_report_label(ws.cell(row_index, 1))
+        ws.cell(row_index, 2, f"=IF($AE${helper_row}=\"\",\"\",$AE${helper_row})")
+        ws.cell(row_index, 3, f"=IF($AF${helper_row}=\"\",\"\",$AF${helper_row})")
+        style_report_auto(ws.cell(row_index, 2))
+        style_report_auto(ws.cell(row_index, 3))
+        style_report_manual(ws.cell(row_index, 4))
+
+    ws["A25"] = "Zakres dat"
+    ws["D25"] = "Godzina"
+    style_report_label(ws["A25"])
+    style_report_label(ws["D25"])
+    ws.merge_cells("B25:C25")
+    ws["B25"] = '=IF(OR(Powietrze_Dane!$B$2="",Powietrze_Dane!$B$3=""),"",TEXT(Powietrze_Dane!$B$2,"dd.mm.yyyy")&" - "&TEXT(Powietrze_Dane!$B$3,"dd.mm.yyyy"))'
+    style_report_auto(ws["B25"])
+    ws.merge_cells("E25:F25")
+    ws["E25"] = '=IF(Powietrze_Dane!$B$4="","",Powietrze_Dane!$B$4)'
+    style_report_auto(ws["E25"])
+
+    section_title(ws, "A27", "Tabela parametrów statystycznych danych pomiarowych")
+    set_headers(ws, 28, ["Lp. stacji", "Stacja", "Zanieczyszczenie", "Jednostka", "MIN", "Średnia", "MAX", "Indeks jakości", "Indeks toksyczności"])
+
+    detail_row = 29
+    for station_offset, station_name in enumerate(AIR_STATIONS, start=1):
+        summary_row = 2 + station_offset
+        for pollutant_offset, helper_row in enumerate(range(10, 13), start=1):
+            ws.cell(detail_row, 1, station_offset)
+            ws.cell(detail_row, 2, station_name)
+            ws.cell(detail_row, 3, f'=IF($AE${helper_row}="","",$AE${helper_row})')
+            ws.cell(detail_row, 4, f'=IF($AF${helper_row}="","",$AF${helper_row})')
+            ws.cell(detail_row, 5, f'=IF($AD${helper_row}="","",INDEX(Powietrze_Wyniki!$J$10:$J$27,($AD${helper_row}-1)*3+{station_offset}))')
+            ws.cell(detail_row, 6, f'=IF($AD${helper_row}="","",INDEX(Powietrze_Wyniki!$K$10:$K$27,($AD${helper_row}-1)*3+{station_offset}))')
+            ws.cell(detail_row, 7, f'=IF($AD${helper_row}="","",INDEX(Powietrze_Wyniki!$L$10:$L$27,($AD${helper_row}-1)*3+{station_offset}))')
+            ws.cell(detail_row, 8, f'=IF($AE${helper_row}="","",Powietrze_Wyniki!$B${summary_row})')
+            ws.cell(detail_row, 9, f'=IF($AE${helper_row}="","",Powietrze_Wyniki!$D${summary_row})')
+            style_report_label(ws.cell(detail_row, 1))
+            style_report_label(ws.cell(detail_row, 2))
+            for column in range(3, 10):
+                style_report_auto(ws.cell(detail_row, column))
+            detail_row += 1
+
+    section_title(ws, "A39", "Obliczenia")
+    set_headers(ws, 40, ["Stacja", "Psi", "Tau", "Przekroczenia średniej", "Przekroczenia maksimum"])
+    for row_index, summary_row in enumerate(range(3, 6), start=41):
+        ws.cell(row_index, 1, f"=Powietrze_Wyniki!$A${summary_row}")
+        ws.cell(row_index, 2, f"=Powietrze_Wyniki!$B${summary_row}")
+        ws.cell(row_index, 3, f"=Powietrze_Wyniki!$D${summary_row}")
+        ws.cell(row_index, 4, f"=Powietrze_Wyniki!$F${summary_row}")
+        ws.cell(row_index, 5, f"=Powietrze_Wyniki!$G${summary_row}")
+        for column in range(1, 6):
+            style_report_auto(ws.cell(row_index, column))
+
+    section_title(ws, "A45", "Interpretacja wyników")
+    ws.merge_cells("A46:I50")
+    style_report_manual(ws["A46"])
+
+    set_widths(
+        ws,
+        {
+            "A": 10,
+            "B": 18,
+            "C": 22,
+            "D": 18,
+            "E": 14,
+            "F": 14,
+            "G": 16,
+            "H": 16,
+            "I": 18,
+        },
+    )
+    hide_columns(ws, ["Z", "AA", "AB", "AC", "AD", "AE", "AF"])
+
+
+def build_soil_report_sheet(ws):
+    merge_title(ws, "A1", "H1", "Ćwiczenie nr 2 - Parametry fizykochemiczne gleby")
+    ws.freeze_panes = "A5"
+    ws.sheet_view.showGridLines = False
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = "1:4"
+
+    for label_cell, value_range in {
+        "A3": "B3:C3",
+        "D3": "E3:F3",
+        "G3": "H3:I3",
+        "A4": "B4:C4",
+        "D4": "E4:F4",
+        "G4": "H4:I4",
+    }.items():
+        ws.merge_cells(f"{value_range}")
+        style_report_label(ws[label_cell])
+        style_report_manual(ws[value_range.split(":")[0]])
+
+    ws["A3"] = "Data"
+    ws["D3"] = "Rok akademicki"
+    ws["G3"] = "Grupa"
+    ws["A4"] = "Zespół"
+    ws["D4"] = "Zaliczenie"
+    ws["G4"] = "Uwagi organizacyjne"
+
+    section_title(ws, "A6", "Skład zespołu badawczego")
+    set_headers(ws, 7, ["Lp.", "Imię i nazwisko", "Rola w zespole", "Uwagi"])
+    for row in range(8, 12):
+        ws.cell(row, 1, row - 7)
+        style_report_label(ws.cell(row, 1))
+        for column in range(2, 5):
+            style_report_manual(ws.cell(row, column))
+
+    section_title(ws, "A13", "Kwasowość czynna")
+    set_headers(ws, 14, ["Przedmiot analizy", "Pomiar 1", "Pomiar 2", "Średnia"])
+    for source_row, target_row in [(5, 15), (6, 16)]:
+        ws.cell(target_row, 1, f"=Gleba_Dane!$A${source_row}")
+        ws.cell(target_row, 2, f"=Gleba_Dane!$B${source_row}")
+        ws.cell(target_row, 3, f"=Gleba_Dane!$C${source_row}")
+        ws.cell(target_row, 4, f"=Gleba_Dane!$D${source_row}")
+        style_report_label(ws.cell(target_row, 1))
+        for column in range(2, 5):
+            style_report_auto(ws.cell(target_row, column))
+
+    section_title(ws, "A18", "Kwasowość wymienna")
+    set_headers(ws, 19, ["Przedmiot analizy", "Pomiar 1", "Pomiar 2", "Średnia"])
+    for source_row, target_row in [(11, 20), (12, 21)]:
+        ws.cell(target_row, 1, f"=Gleba_Dane!$A${source_row}")
+        ws.cell(target_row, 2, f"=Gleba_Dane!$B${source_row}")
+        ws.cell(target_row, 3, f"=Gleba_Dane!$C${source_row}")
+        ws.cell(target_row, 4, f"=Gleba_Dane!$D${source_row}")
+        style_report_label(ws.cell(target_row, 1))
+        for column in range(2, 5):
+            style_report_auto(ws.cell(target_row, column))
+
+    section_title(ws, "A23", "Kwasowość hydrolityczna")
+    set_headers(ws, 24, ["Parametr", "Wartość", "Jednostka", "Uwagi"])
+    hydro_rows = [
+        ("VNaOH", "=Gleba_Dane!$B$17", "cm3", ""),
+        ("c_NaOH", "=Gleba_Dane!$B$18", "mol/dm3", ""),
+        ("k", "=Gleba_Dane!$B$19", "współczynnik", "dobierz do rodzaju gleby"),
+        ("Hh", "=Gleba_Wyniki!$B$8", "mmol(+)/100 g", "wynik obliczeń"),
+    ]
+    for row_index, values in enumerate(hydro_rows, start=25):
+        for column_index, value in enumerate(values, start=1):
+            ws.cell(row_index, column_index, value)
+            if column_index == 1:
+                style_report_label(ws.cell(row_index, column_index))
+            elif column_index in (2, 3):
+                style_report_auto(ws.cell(row_index, column_index))
+            else:
+                style_report_manual(ws.cell(row_index, column_index))
+
+    section_title(ws, "A30", "Przebieg reakcji")
+    ws.merge_cells("A31:H33")
+    style_report_manual(ws["A31"])
+
+    section_title(ws, "A35", "Obliczenia")
+    set_headers(ws, 36, ["Wielkość", "Wartość", "Jednostka", "Komentarz"])
+    calc_rows = [
+        ("Hh", "=Gleba_Wyniki!$B$8", "mmol(+)/100 g", ""),
+        ("Mz", "=Gleba_Wyniki!$B$9", "kg", "wartość pomocnicza"),
+        ("Hh_ha", "=Gleba_Wyniki!$B$10", "mol(+)", "wartość pomocnicza"),
+        ("CaO", "=Gleba_Wyniki!$B$11", "kg/ha", "wartość pomocnicza"),
+        ("CaCO3", "=Gleba_Wyniki!$B$12", "kg/ha", "wartość pomocnicza"),
+    ]
+    for row_index, values in enumerate(calc_rows, start=37):
+        for column_index, value in enumerate(values, start=1):
+            ws.cell(row_index, column_index, value)
+            if column_index == 1:
+                style_report_label(ws.cell(row_index, column_index))
+            elif column_index in (2, 3):
+                style_report_auto(ws.cell(row_index, column_index))
+            else:
+                style_report_manual(ws.cell(row_index, column_index))
+
+    section_title(ws, "A43", "Stopień wysycenia kationami zasadowymi")
+    set_headers(ws, 44, ["Parametr", "Wartość", "Jednostka", "Uwagi"])
+    base_rows = [
+        ("V_HCl", "=Gleba_Dane!$B$24", "cm3", ""),
+        ("c_HCl", "=Gleba_Dane!$B$25", "mol/dm3", ""),
+        ("V1_NaOH", "=Gleba_Dane!$B$26", "cm3", ""),
+        ("c1_NaOH", "=Gleba_Dane!$B$27", "mol/dm3", ""),
+        ("S", "=Gleba_Wyniki!$B$13", "mmol(+)/100 g", "wynik obliczeń"),
+    ]
+    for row_index, values in enumerate(base_rows, start=45):
+        for column_index, value in enumerate(values, start=1):
+            ws.cell(row_index, column_index, value)
+            if column_index == 1:
+                style_report_label(ws.cell(row_index, column_index))
+            elif column_index in (2, 3):
+                style_report_auto(ws.cell(row_index, column_index))
+            else:
+                style_report_manual(ws.cell(row_index, column_index))
+
+    section_title(ws, "A51", "Przebieg reakcji")
+    ws.merge_cells("A52:H54")
+    style_report_manual(ws["A52"])
+
+    section_title(ws, "A56", "Pojemność sorpcyjna")
+    set_headers(ws, 57, ["Wielkość", "Wartość", "Jednostka", "Uwagi"])
+    sorption_rows = [
+        ("Hh", "=Gleba_Wyniki!$B$8", "mmol(+)/100 g", ""),
+        ("S", "=Gleba_Wyniki!$B$13", "mmol(+)/100 g", ""),
+        ("T", "=Gleba_Wyniki!$B$14", "mmol(+)/100 g", "wynik obliczeń"),
+        ("Klasa gleby uprawnej", "=Gleba_Wyniki!$B$15", "", "automatycznie"),
+        ("Klasa gleby leśnej", "=Gleba_Wyniki!$B$16", "", "automatycznie"),
+    ]
+    for row_index, values in enumerate(sorption_rows, start=58):
+        for column_index, value in enumerate(values, start=1):
+            ws.cell(row_index, column_index, value)
+            if column_index == 1:
+                style_report_label(ws.cell(row_index, column_index))
+            elif column_index in (2, 3):
+                style_report_auto(ws.cell(row_index, column_index))
+            else:
+                style_report_manual(ws.cell(row_index, column_index))
+
+    section_title(ws, "A64", "Interpretacja wyników")
+    ws.merge_cells("A65:H69")
+    style_report_manual(ws["A65"])
+
+    set_widths(
+        ws,
+        {
+            "A": 24,
+            "B": 16,
+            "C": 16,
+            "D": 18,
+            "E": 16,
+            "F": 16,
+            "G": 18,
+            "H": 18,
+            "I": 18,
+        },
+    )
 
 
 def autofit_sheet(ws):
@@ -523,18 +898,22 @@ def build_workbook() -> Workbook:
     air_mapping_ws = wb.create_sheet("Powietrze_Mapowanie")
     air_results_ws = wb.create_sheet("Powietrze_Wyniki")
     air_charts_ws = wb.create_sheet("Powietrze_Wykresy")
+    air_report_ws = wb.create_sheet("Sprawozdanie_powietrze")
     soil_data_ws = wb.create_sheet("Gleba_Dane")
     soil_results_ws = wb.create_sheet("Gleba_Wyniki")
     soil_charts_ws = wb.create_sheet("Gleba_Wykresy")
+    soil_report_ws = wb.create_sheet("Sprawozdanie_gleba")
 
     build_readme_sheet(readme_ws)
     build_air_data_sheet(air_data_ws)
     build_air_mapping_sheet(air_mapping_ws)
     build_air_results_sheet(air_results_ws)
     build_air_charts_sheet(air_charts_ws)
+    build_air_report_sheet(air_report_ws)
     build_soil_data_sheet(soil_data_ws)
     build_soil_results_sheet(soil_results_ws)
     build_soil_charts_sheet(soil_charts_ws)
+    build_soil_report_sheet(soil_report_ws)
 
     wb.calculation.fullCalcOnLoad = True
     wb.calculation.forceFullCalc = True
@@ -552,9 +931,11 @@ def verify_workbook(path: Path):
         "Powietrze_Mapowanie",
         "Powietrze_Wyniki",
         "Powietrze_Wykresy",
+        "Sprawozdanie_powietrze",
         "Gleba_Dane",
         "Gleba_Wyniki",
         "Gleba_Wykresy",
+        "Sprawozdanie_gleba",
     ]
     assert wb.sheetnames == expected, wb.sheetnames
     assert wb["Powietrze_Wyniki"]["B3"].data_type == "f"
@@ -567,9 +948,20 @@ def verify_workbook(path: Path):
     assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["K10"].value
     assert wb["Powietrze_Wyniki"]["H3"].value == '=SUMPRODUCT(($B$10:$B$27=A3)*(LEN($Q$10:$Q$27)>0))'
     assert wb["Powietrze_Wyniki"]["I3"].value == '=SUMPRODUCT(($B$10:$B$27=A3)*(LEN($R$10:$R$27)>0))'
-    assert wb["Powietrze_Dane"]["B87"].value == "BENZEN"
+    assert wb["Powietrze_Dane"]["B2"].value is None
+    assert wb["Powietrze_Dane"]["B7"].value is None
+    assert wb["Powietrze_Dane"]["B87"].value is None
+    assert wb["Gleba_Dane"]["B5"].value is None
+    assert wb["Gleba_Dane"]["B17"].value is None
+    assert wb["Gleba_Dane"]["B18"].value == 0.1
     assert wb["Gleba_Wykresy"]["B5"].value == "=Gleba_Wyniki!B4"
     assert wb["Gleba_Wykresy"]["B8"].value == "=Gleba_Wyniki!B7"
+    assert wb["Sprawozdanie_powietrze"]["B21"].data_type == "f"
+    assert wb["Sprawozdanie_powietrze"]["E29"].data_type == "f"
+    assert wb["Sprawozdanie_gleba"]["B15"].data_type == "f"
+    assert wb["Sprawozdanie_gleba"]["B58"].data_type == "f"
+    assert len(wb["Powietrze_Wykresy"]._charts) == 6
+    assert len(wb["Gleba_Wykresy"]._charts) == 3
     assert path.exists()
 
 
