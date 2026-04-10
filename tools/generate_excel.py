@@ -82,7 +82,7 @@ AIR_SAMPLE = {
         ("NO2", "ditlenek azotu", "µg/m3", [88, 92, 96, 101, 98, 95, 90, 87, 84, 82], [61, 64, 67, 69, 70, 68, 65, 63, 61, 59], [39, 41, 43, 45, 44, 42, 41, 39, 38, 37]),
         ("PM10", "pył zawieszony PM10", "µg/m3", [29, 31, 34, 36, 35, 33, 30, 28, 27, 26], [23, 24, 26, 27, 28, 27, 25, 24, 23, 22], [18, 19, 21, 22, 21, 20, 19, 18, 17, 17]),
         ("CO", "tlenek węgla", "µg/m3", [1600, 1700, 1800, 1750, 1690, 1650, 1620, 1580, 1540, 1500], [1300, 1360, 1400, 1380, 1340, 1320, 1290, 1260, 1230, 1210], [900, 940, 980, 990, 960, 940, 920, 900, 880, 860]),
-        ("", "", "µg/m3", ["", "", "", "", "", "", "", "", "", ""], ["", "", "", "", "", "", "", "", "", ""], ["", "", "", "", "", "", "", "", "", ""]),
+        ("BENZEN", "benzen", "µg/m3", [1.2, 1.4, 1.5, 1.6, 1.7, 1.5, 1.4, 1.3, 1.2, 1.1], [0.9, 1.0, 1.1, 1.2, 1.2, 1.1, 1.0, 0.9, 0.9, 0.8], [0.5, 0.6, 0.7, 0.8, 0.8, 0.7, 0.6, 0.6, 0.5, 0.5]),
     ],
 }
 
@@ -153,8 +153,10 @@ def set_widths(ws, widths: dict[str, float]):
         ws.column_dimensions[column].width = width
 
 
-def data_range_formula(column: str, first_row: int, last_row: int, fn: str) -> str:
-    return f'=IF(COUNTA({column}{first_row}:{column}{last_row})=0,"",{fn}({column}{first_row}:{column}{last_row}))'
+def data_range_formula(column: str, first_row: int, last_row: int, fn: str, sheet_name: str | None = None) -> str:
+    prefix = f"'{sheet_name}'!" if sheet_name else ""
+    range_ref = f"{prefix}{column}{first_row}:{column}{last_row}"
+    return f'=IF(COUNTA({range_ref})=0,"",{fn}({range_ref}))'
 
 
 def station_value_column(station_name: str) -> str:
@@ -308,9 +310,9 @@ def build_air_results_sheet(ws):
             ws.cell(detail_row, 7, f'=IF(F{detail_row}="","",IFERROR(INDEX(Powietrze_Mapowanie!$B$4:$B$20,MATCH(F{detail_row},Powietrze_Mapowanie!$A$4:$A$20,0)),""))')
             ws.cell(detail_row, 8, f'=IF(C{detail_row}&D{detail_row}="","",IFERROR(INDEX(Powietrze_Mapowanie!$J$4:$J$40,MATCH(C{detail_row},Powietrze_Mapowanie!$G$4:$G$40,0)),IFERROR(INDEX(Powietrze_Mapowanie!$J$4:$J$40,MATCH(D{detail_row},Powietrze_Mapowanie!$G$4:$G$40,0)),IF(D{detail_row}<>"",D{detail_row},C{detail_row}))))')
             ws.cell(detail_row, 9, f'=IF(H{detail_row}="","",IFERROR(INDEX(Powietrze_Mapowanie!$E$4:$E$30,MATCH(H{detail_row},Powietrze_Mapowanie!$D$4:$D$30,0)),""))')
-            ws.cell(detail_row, 10, data_range_formula(value_col, first_data_row, last_data_row, "MIN"))
-            ws.cell(detail_row, 11, data_range_formula(value_col, first_data_row, last_data_row, "AVERAGE"))
-            ws.cell(detail_row, 12, data_range_formula(value_col, first_data_row, last_data_row, "MAX"))
+            ws.cell(detail_row, 10, data_range_formula(value_col, first_data_row, last_data_row, "MIN", "Powietrze_Dane"))
+            ws.cell(detail_row, 11, data_range_formula(value_col, first_data_row, last_data_row, "AVERAGE", "Powietrze_Dane"))
+            ws.cell(detail_row, 12, data_range_formula(value_col, first_data_row, last_data_row, "MAX", "Powietrze_Dane"))
             ws.cell(detail_row, 13, f'=IF(G{detail_row}="","Brak limitu",IF(K{detail_row}="","Brak danych",IF(K{detail_row}>G{detail_row},"TAK","NIE")))')
             ws.cell(detail_row, 14, f'=IF(G{detail_row}="","Brak limitu",IF(L{detail_row}="","Brak danych",IF(L{detail_row}>G{detail_row},"TAK","NIE")))')
             ws.cell(detail_row, 15, f'=IF(AND(ISNUMBER(K{detail_row}),ISNUMBER(G{detail_row})),K{detail_row}/G{detail_row},"")')
@@ -461,8 +463,10 @@ def build_soil_charts_sheet(ws):
     ws["A6"] = "Średnie pH próbki w wodzie"
     ws["A7"] = "Średnie pH KCl"
     ws["A8"] = "Średnie pH próbki w KCl"
-    for row in range(5, 9):
-        ws.cell(row, 2, f"=Gleba_Wyniki!B{row}")
+    ws["B5"] = "=Gleba_Wyniki!B4"
+    ws["B6"] = "=Gleba_Wyniki!B5"
+    ws["B7"] = "=Gleba_Wyniki!B6"
+    ws["B8"] = "=Gleba_Wyniki!B7"
     ws["A12"] = "Hh vs S vs T"
     ws["A13"] = "Hh"
     ws["A14"] = "S"
@@ -556,6 +560,11 @@ def verify_workbook(path: Path):
     assert wb.sheetnames == expected, wb.sheetnames
     assert wb["Powietrze_Wyniki"]["B3"].data_type == "f"
     assert wb["Gleba_Wyniki"]["B8"].data_type == "f"
+    assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["J10"].value
+    assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["K10"].value
+    assert wb["Powietrze_Dane"]["B87"].value == "BENZEN"
+    assert wb["Gleba_Wykresy"]["B5"].value == "=Gleba_Wyniki!B4"
+    assert wb["Gleba_Wykresy"]["B8"].value == "=Gleba_Wyniki!B7"
     assert path.exists()
 
 
