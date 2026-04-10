@@ -287,8 +287,8 @@ def build_air_results_sheet(ws):
         ws.cell(row_index, 5, f'=IF(D{row_index}="","Brak danych","niższa wartość oznacza lepszą jakość powietrza")')
         ws.cell(row_index, 6, f'=COUNTIFS($B$10:$B$27,A{row_index},$M$10:$M$27,"TAK")')
         ws.cell(row_index, 7, f'=COUNTIFS($B$10:$B$27,A{row_index},$N$10:$N$27,"TAK")')
-        ws.cell(row_index, 8, f'=COUNTIFS($B$10:$B$27,A{row_index},$Q$10:$Q$27,"<>")')
-        ws.cell(row_index, 9, f'=COUNTIFS($B$10:$B$27,A{row_index},$R$10:$R$27,"<>")')
+        ws.cell(row_index, 8, f'=SUMPRODUCT(($B$10:$B$27=A{row_index})*(LEN($Q$10:$Q$27)>0))')
+        ws.cell(row_index, 9, f'=SUMPRODUCT(($B$10:$B$27=A{row_index})*(LEN($R$10:$R$27)>0))')
         for column in range(1, 10):
             style_cell(ws.cell(row_index, column), fill=FILL_FORMULA if column != 1 else FILL_STATIC, font=FONT_NORMAL, alignment=ALIGN_TOP)
 
@@ -562,6 +562,8 @@ def verify_workbook(path: Path):
     assert wb["Gleba_Wyniki"]["B8"].data_type == "f"
     assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["J10"].value
     assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["K10"].value
+    assert wb["Powietrze_Wyniki"]["H3"].value == '=SUMPRODUCT(($B$10:$B$27=A3)*(LEN($Q$10:$Q$27)>0))'
+    assert wb["Powietrze_Wyniki"]["I3"].value == '=SUMPRODUCT(($B$10:$B$27=A3)*(LEN($R$10:$R$27)>0))'
     assert wb["Powietrze_Dane"]["B87"].value == "BENZEN"
     assert wb["Gleba_Wykresy"]["B5"].value == "=Gleba_Wyniki!B4"
     assert wb["Gleba_Wykresy"]["B8"].value == "=Gleba_Wyniki!B7"
