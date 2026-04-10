@@ -2,3 +2,4 @@ tmp/
 __pycache__/
 *.pyc
 /[0-9a-z_][0-9a-z_][0-9a-z_][0-9a-z_][0-9a-z_][0-9a-z_][0-9a-z_][0-9a-z_]
+output/~$*.xlsx

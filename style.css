@@ -113,6 +113,17 @@ button {
   margin-top: 18px;
 }
 
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.hero__actions .button {
+  text-decoration: none;
+}
+
 .hero__notes span,
 .chip {
   display: inline-flex;
@@ -731,6 +742,11 @@ tbody tr:nth-child(even) td {
     grid-template-columns: 1fr;
     text-align: left;
     padding: 22px;
+  }
+
+  .hero__actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .app-card {

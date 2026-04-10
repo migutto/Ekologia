@@ -13,6 +13,25 @@ Repozytorium zawiera:
 
 Całość jest przygotowana po polsku i bez backendu, tak aby działała lokalnie z pliku `index.html` lub po publikacji na GitHub Pages.
 
+## GitHub Pages
+
+Repozytorium zawiera workflow `/.github/workflows/pages.yml`, który publikuje statyczną wersję projektu na GitHub Pages po pushu do `main`.
+
+Do publikacji trafiają:
+
+- `index.html`
+- `style.css`
+- `app.js`
+- `assets/`
+- `output/`
+- `README.md`
+
+Jeżeli repozytorium ma włączone GitHub Pages z użyciem GitHub Actions, strona powinna być dostępna pod adresem:
+
+```text
+https://migutto.github.io/Ekologia/
+```
+
 ## Struktura plików
 
 - `index.html` - główny interfejs aplikacji
