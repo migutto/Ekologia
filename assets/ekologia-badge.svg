@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Symbol kalkulatora ekologii</title>
+  <desc id="desc">Prosty znak z liściem, wykresem i warstwami gleby.</desc>
+  <defs>
+    <linearGradient id="leaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8fbf72" />
+      <stop offset="100%" stop-color="#2f6a48" />
+    </linearGradient>
+    <linearGradient id="soil" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#b08552" />
+      <stop offset="100%" stop-color="#8f6137" />
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="296" height="296" rx="54" fill="#eef5ed" />
+  <circle cx="160" cy="160" r="102" fill="#f8fbf5" stroke="#d6e4d5" stroke-width="6" />
+  <path d="M102 163c29-73 122-71 133-70-5 20-25 86-87 114-22 10-47 11-63 8 2-8 7-24 17-39z" fill="url(#leaf)" />
+  <path d="M146 224c5-33 19-66 52-97" fill="none" stroke="#eef5ed" stroke-width="7" stroke-linecap="round" />
+  <path d="M92 116l30 8 20-23 23 28 32-18 32 28" fill="none" stroke="#295840" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="92" cy="116" r="7" fill="#295840" />
+  <circle cx="122" cy="124" r="7" fill="#295840" />
+  <circle cx="142" cy="101" r="7" fill="#295840" />
+  <circle cx="165" cy="129" r="7" fill="#295840" />
+  <circle cx="197" cy="111" r="7" fill="#295840" />
+  <circle cx="229" cy="139" r="7" fill="#295840" />
+  <path d="M84 232h152" stroke="#d7c1a6" stroke-width="14" stroke-linecap="round" />
+  <path d="M100 250h138" stroke="url(#soil)" stroke-width="16" stroke-linecap="round" />
+  <path d="M118 272h110" stroke="#6e4c2f" stroke-width="14" stroke-linecap="round" />
+</svg>

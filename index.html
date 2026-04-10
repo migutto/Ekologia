@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kalkulator ekologii</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__media">
+        <img src="assets/ekologia-badge.svg" alt="Symbol kalkulatora ekologii">
+      </div>
+      <div class="hero__content">
+        <p class="eyebrow">Ekologia i zarządzanie środowiskiem</p>
+        <h1>Kalkulator do sprawozdań z powietrza i gleby</h1>
+        <p class="hero__lead">
+          Offline, po polsku i bez backendu. Wprowadzaj dane pomiarowe, obliczaj wskaźniki,
+          przeglądaj wykresy i przygotuj wyniki do sprawozdań.
+        </p>
+        <div class="hero__notes">
+          <span>Ćwiczenie 1: poziom zanieczyszczenia powietrza</span>
+          <span>Ćwiczenie 2: parametry fizykochemiczne gleby</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-card">
+      <nav class="tabs" aria-label="Moduły kalkulatora">
+        <button class="tab-button is-active" type="button" data-action="set-tab" data-tab="powietrze">
+          Powietrze
+        </button>
+        <button class="tab-button" type="button" data-action="set-tab" data-tab="gleba">
+          Gleba
+        </button>
+      </nav>
+
+      <div id="app"></div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
