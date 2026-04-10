@@ -253,7 +253,6 @@ def build_air_mapping_sheet(ws):
         style_cell(ws.cell(row, 1), fill=FILL_INPUT, font=FONT_NORMAL)
         style_cell(ws.cell(row, 2), fill=FILL_INPUT, font=FONT_NORMAL)
 
-    set_headers(ws, 3, ["Zanieczyszczenie", "Współczynnik toksyczności"])
     ws["D3"] = "Zanieczyszczenie"
     ws["E3"] = "Współczynnik toksyczności"
     style_cell(ws["D3"], fill=FILL_SECTION, font=FONT_HEADER, alignment=ALIGN_CENTER)
@@ -560,6 +559,10 @@ def verify_workbook(path: Path):
     assert wb.sheetnames == expected, wb.sheetnames
     assert wb["Powietrze_Wyniki"]["B3"].data_type == "f"
     assert wb["Gleba_Wyniki"]["B8"].data_type == "f"
+    assert wb["Powietrze_Mapowanie"]["A3"].value == "Substancja"
+    assert "Limit D24" in wb["Powietrze_Mapowanie"]["B3"].value
+    assert wb["Powietrze_Mapowanie"]["D3"].value == "Zanieczyszczenie"
+    assert "Współczynnik toksyczności" == wb["Powietrze_Mapowanie"]["E3"].value
     assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["J10"].value
     assert "'Powietrze_Dane'!" in wb["Powietrze_Wyniki"]["K10"].value
     assert wb["Powietrze_Wyniki"]["H3"].value == '=SUMPRODUCT(($B$10:$B$27=A3)*(LEN($Q$10:$Q$27)>0))'
